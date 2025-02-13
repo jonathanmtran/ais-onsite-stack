@@ -1,0 +1,149 @@
+- hosts: all
+  tasks:
+    - name: Set timezone
+      ansible.builtin.file:
+        src: /usr/share/zoneinfo/America/Los_Angeles
+        dest: /etc/localtime
+        state: link
+      register: tzdata
+
+    - name: Apply timezone
+      ansible.builtin.command: dpkg-reconfigure --frontend noninteractive tzdata
+      when: tzdata.changed
+
+    - ansible.builtin.group:
+        name: ais
+        state: present
+
+    - ansible.builtin.user:
+        name: ais
+        group: ais
+        groups:
+          - users
+        shell: /sbin/nologin
+
+    # - ansible.builtin.apt:
+    #     update_cache: true
+    #     upgrade: full
+
+    - name: Ensure utility packages are installed
+      ansible.builtin.apt:
+        pkg:
+          - rsync
+
+    - name: Ensure Docker prereqs are installed
+      ansible.builtin.apt:
+        pkg:
+          - ca-certificates
+          - curl
+
+    - name: Ensure /etc/apt/keyrings exists
+      ansible.builtin.stat:
+        path: /etc/apt/keyrings
+      register: keyrings
+
+    - name: Create /etc/apt/keyrings
+      ansible.builtin.command: install -m 0755 -d /etc/apt/keyrings
+      when: keyrings.stat.isdir is not defined
+
+    - name: Ensure Docker's GPG key exists
+      ansible.builtin.get_url:
+        url: https://download.docker.com/linux/debian/gpg
+        dest: /etc/apt/keyrings/docker.asc
+
+    - name: Ensure Docker's GPG key has appropriate permissions
+      ansible.builtin.file:
+        path: /etc/apt/keyrings/docker.asc
+        mode: '0444'
+
+    # echo \
+    #   "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian \
+    #   $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+    #   tee /etc/apt/sources.list.d/docker.list > /dev/null
+    - name: Ensure Docker apt repo exists
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+
+    - name: Ensure Docker is installed
+      ansible.builtin.apt:
+        pkg:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+
+    - ansible.builtin.file:
+        path: /opt/photoprism
+        state: directory
+
+    - name: Ensure docker-compose.yml for Photoprism exists
+      ansible.builtin.copy:
+        src: files/opt/photoprism/docker-compose.yml
+        dest: /opt/photoprism/docker-compose.yml
+
+    - name: Ensure Samba is installed
+      ansible.builtin.apt:
+        pkg:
+          - samba
+
+    - name: Ensure smb.conf is up-to-date
+      ansible.builtin.copy:
+        src: files/etc/samba/smb.conf
+        dest: /etc/samba/smb.conf
+      register: smb
+
+    - name: Restart Samba
+      ansible.builtin.systemd_service:
+        name: smbd
+        state: restarted
+      when:
+        - smb is defined
+        - smb.changed
+
+    - name: Ensure backports apt repo exists
+      ansible.builtin.apt_repository:
+        repo: "deb http://deb.debian.org/debian bookworm-backports main contrib"
+        state: present
+        filename: bookworm-backports
+
+    - name: Ensure zfs-dkms is installed
+      ansible.builtin.apt:
+        pkg:
+          - zfs-dkms
+          - zfsutils-linux
+      when: ansible_facts['virtualization_tech_guest'] is not contains("lxc")
+
+    - name: Ensure Sanoid is installed
+      ansible.builtin.apt:
+        pkg:
+          - sanoid
+      when: ansible_facts['virtualization_tech_guest'] is not contains("lxc")
+      register: sanoid
+
+    - name: Ensure that /etc/sanoid exists
+      ansible.builtin.file:
+        path: /etc/sanoid
+        state: directory
+      when: sanoid
+
+    - name: Ensure Sanoid configuration is up-to-date
+      ansible.builtin.copy:
+        src: files/etc/sanoid/sanoid.conf
+        dest: /etc/sanoid/sanoid.conf
+      when:
+        - sanoid
+
+    - ansible.builtin.file:
+        path: /mnt/tank/group/aliveinspirit
+        owner: ais
+        group: ais
+        mode: u=rwx,g=rwx,o=rx,g+s
+
+    - ansible.builtin.file:
+        path: /mnt/tank/group/aliveinspirit/AIS_2025
+        owner: ais
+        group: ais
+        mode: u=rwx,g=rwx,o=rx,g+s
