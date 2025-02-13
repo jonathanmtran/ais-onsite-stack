@@ -7,7 +7,7 @@ This is an Ansible playbook that installs and configures the following:
 * PhotoPrism
 * Sanoid
 
-This stack was deployed and used in January 2025. There were bugs.
+This stack was deployed and used in January 2025.
 
 ## Background
 
@@ -21,6 +21,7 @@ I needed a server for the following functions:
   * curating photos for a (background) slideshow
 
 ## License
+
 MIT
 
 ## Usage

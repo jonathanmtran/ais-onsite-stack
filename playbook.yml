@@ -22,9 +22,11 @@
           - users
         shell: /sbin/nologin
 
-    # - ansible.builtin.apt:
-    #     update_cache: true
-    #     upgrade: full
+    - name: Ensure backports apt repo exists
+      ansible.builtin.apt_repository:
+        repo: "deb http://deb.debian.org/debian bookworm-backports main contrib"
+        state: present
+        filename: bookworm-backports
 
     - name: Ensure utility packages are installed
       ansible.builtin.apt:
@@ -102,12 +104,6 @@
       when:
         - smb is defined
         - smb.changed
-
-    - name: Ensure backports apt repo exists
-      ansible.builtin.apt_repository:
-        repo: "deb http://deb.debian.org/debian bookworm-backports main contrib"
-        state: present
-        filename: bookworm-backports
 
     - name: Ensure zfs-dkms is installed
       ansible.builtin.apt:
